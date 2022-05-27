@@ -21,6 +21,7 @@ contract Swap {
     address USDC;
     address USDT;
     address MyToken;
+    uint256 decimals = 18;
     AggregatorV3Interface private usdtPriceFeed ;
     AggregatorV3Interface private usdcPriceFeed;
     mapping(address => uint256) private addressToSwappedAmount;
@@ -38,23 +39,24 @@ contract Swap {
         require(amount > 0,"Amount is zero");
         require(token == USDC || token == USDT,"Token not supported");
 
-        int usdcPrice;
-        int usdtPrice;
+        int256 usdcPrice;
+        int256 usdtPrice;
         (,usdcPrice,,,) = usdcPriceFeed.latestRoundData();
         (,usdtPrice,,,) = usdtPriceFeed.latestRoundData();
         IERC20 tokenA = IERC20(USDC);
         IERC20 tokenB = IERC20(USDT);
 
         if(token == USDC){
-            amount *= uint256(usdcPrice/usdtPrice);
             require(tokenA.allowance(msg.sender,address(this)) >= amount,"Approval is required");
             _safeTransferFrom(tokenA,msg.sender,address(this),amount);
+            amount = uint256((usdcPrice * 10 ** 18)/usdtPrice * int256(amount));
+            amount /= 10 ** 18;
             tokenB.approve(address(this),amount);
             _safeTransferFrom(tokenB,address(this),msg.sender,amount);
         }else{
-            amount *= uint256(usdtPrice/usdcPrice);
             require(tokenB.allowance(msg.sender,address(this)) >= amount,"Approval is required");
             _safeTransferFrom(tokenB,msg.sender,address(this),amount);
+            amount = uint256(((usdtPrice* 10 ** 18)/usdcPrice) * int256(amount));
             tokenA.approve(address(this),amount);
             _safeTransferFrom(tokenA,address(this),msg.sender,amount);
         }
@@ -72,7 +74,16 @@ contract Swap {
 
     function _reward(address winner) internal{
         IERC20 rewardToken = IERC20(MyToken);
-        bool send = rewardToken.transfer(winner,50);
+        bool send = rewardToken.transfer(winner,50 * 10 ** 18);
         require(send,"Transfer Failed");
+    }
+
+    function getSwapPrice() view public returns(int256){
+        int256 usdcPrice;
+        int256 usdtPrice;
+        (,usdcPrice,,,) = usdcPriceFeed.latestRoundData();
+        (,usdtPrice,,,) = usdtPriceFeed.latestRoundData();
+        return (usdtPrice * 10 ** 18)/usdcPrice;
+
     }
 }
